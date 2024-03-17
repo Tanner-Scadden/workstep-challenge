@@ -1,5 +1,5 @@
 import { Grid, InputAdornment, Tab, Tabs, TextField } from "@mui/material";
-import { CANDIDATE_STEP_OPTIONS } from "./constants/candidateConstants";
+import { CANDIDATE_STEP_OPTIONS } from "./constants/candidateOptions";
 import { useDebounceCallback } from "@react-hook/debounce";
 import { useCandidatesSearchStore } from "./stores/CandidatesSearchStore";
 import { useSearch } from "../../hooks/useSearch";

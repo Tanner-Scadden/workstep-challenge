@@ -1,6 +1,12 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getCandidates } from "./resources/getCandidates";
 import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+  QueryErrorResetBoundary,
+} from "@tanstack/react-query";
+import { searchCandidates } from "./resources/searchCandidates";
+import {
+  Button,
   Grid,
   Link,
   MenuItem,
@@ -10,14 +16,15 @@ import {
 } from "@mui/material";
 import { useCandidatesSearchStore } from "./stores/CandidatesSearchStore";
 import { Candidate } from "./constants/candidateSchemas";
+import { CANDIDATE_STEP_OPTIONS } from "./constants/candidateOptions";
+import { updateCandidate } from "./resources/updateCandidates";
 import {
-  CANDIDATE_STEP_OPTIONS,
   CandidateStep,
-} from "./constants/candidateConstants";
-import {
-  UpdateCandidateOptions,
-  updateCandidate,
-} from "./resources/updateCandidates";
+  UpdateCandidateMutationVariables,
+} from "../../gql/graphql";
+import { Suspense } from "react";
+import { ErrorBoundary } from "react-error-boundary";
+import { Replay } from "@mui/icons-material";
 
 const RowLoadingSkeleton = () => {
   return (
@@ -39,7 +46,7 @@ const RowLoadingSkeleton = () => {
 
 type CandidateRowProps = {
   candidate: Candidate;
-  handleUpdate: (options: UpdateCandidateOptions) => void;
+  handleUpdate: (options: UpdateCandidateMutationVariables) => void;
   mutating: boolean;
 };
 
@@ -53,7 +60,6 @@ const CandidateRow = ({
       container
       item
       role="row"
-      key={candidate.id}
       sx={(theme) => ({
         borderBottom: `1px solid ${theme.palette.divider}`,
         pb: theme.spacing(1),
@@ -84,8 +90,15 @@ const CandidateRow = ({
           fullWidth
           onChange={(e) =>
             handleUpdate({
-              id: candidate.id,
-              payload: { ...candidate, step: e.target.value as CandidateStep },
+              id: +candidate.id,
+              update: {
+                name: candidate.name,
+                email: candidate.email,
+                phone: candidate.phone,
+                time_interview: candidate.time_interview,
+                profile_url: candidate.profile_url,
+                step: e.target.value as CandidateStep,
+              },
             })
           }
           value={candidate.step || ""}
@@ -115,64 +128,46 @@ const CandidateRow = ({
 const CandidatesBody = () => {
   const [store] = useCandidatesSearchStore();
 
-  // Normally this would be making a call to the API to handle sorting/filters/pagination on the server. But for this example, we're just doing it in the client.
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["candidates"],
-    queryFn: getCandidates,
-    select(data) {
-      let clonedData = structuredClone(data);
-
-      if (store.filter) {
-        clonedData = clonedData.filter((candidate) =>
-          candidate.name.toLowerCase().includes(store.filter!.toLowerCase())
-        );
-      }
-
-      if (store.step) {
-        clonedData = clonedData.filter(
-          (candidate) => candidate.step === store.step
-        );
-      }
-
-      return clonedData;
-    },
+  const { data } = useSuspenseQuery({
+    queryKey: ["candidates", store.filter, store.step],
+    queryFn: () =>
+      searchCandidates({
+        step: store.step,
+        name: store.filter,
+      }),
   });
 
   const queryClient = useQueryClient();
 
   const mutate = useMutation({
-    mutationFn: async (options: UpdateCandidateOptions) => {
+    mutationFn: async (options: UpdateCandidateMutationVariables) => {
       const data = await updateCandidate(options);
       return data;
     },
-    onSuccess(_data, variables) {
-      queryClient.setQueryData(["candidates"], (oldData: Candidate[]) => {
-        return oldData.map((candidate) => {
-          if (candidate.id === variables.id) {
-            return variables.payload;
-          }
+    onSuccess(data, variables) {
+      const searchId = String(variables.id);
+      queryClient.setQueryData(
+        ["candidates", store.filter, store.step],
+        (oldData: Candidate[]) => {
+          return oldData.map((candidate) => {
+            if (candidate.id === searchId) {
+              return { ...data, id: candidate.id };
+            }
 
-          return candidate;
-        });
+            return candidate;
+          });
+        }
+      );
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === "candidates",
       });
     },
+    onError(error) {
+      console.error(error);
+      throw error;
+    },
+    throwOnError: true,
   });
-
-  if (error) {
-    return <Typography>Error: {error.message}</Typography>;
-  }
-
-  if (isLoading || !data) {
-    return (
-      <Grid item container spacing={1} flexDirection="column" role="rowgroup">
-        <RowLoadingSkeleton />
-        <RowLoadingSkeleton />
-        <RowLoadingSkeleton />
-        <RowLoadingSkeleton />
-        <RowLoadingSkeleton />
-      </Grid>
-    );
-  }
 
   return (
     <Grid item container spacing={1} flexDirection="column" role="rowgroup">
@@ -207,7 +202,45 @@ export const CandidatesTable = () => {
           <Typography>Date Interviewed</Typography>
         </Grid>
       </Grid>
-      <CandidatesBody />
+      <QueryErrorResetBoundary>
+        {({ reset }) => (
+          <ErrorBoundary
+            onReset={reset}
+            fallbackRender={({ error, resetErrorBoundary }) => (
+              <Grid item container alignItems="center" gap={2}>
+                <Grid item xs={8}>
+                  <Typography variant="body1" color="error">
+                    <b>Error</b>: {error.message}
+                  </Typography>
+                </Grid>
+                <Grid item xs={3}>
+                  <Button
+                    variant="contained"
+                    onClick={resetErrorBoundary}
+                    startIcon={<Replay />}
+                  >
+                    Go Back
+                  </Button>
+                </Grid>
+              </Grid>
+            )}
+          >
+            <Suspense
+              fallback={
+                <>
+                  <RowLoadingSkeleton />
+                  <RowLoadingSkeleton />
+                  <RowLoadingSkeleton />
+                  <RowLoadingSkeleton />
+                  <RowLoadingSkeleton />
+                </>
+              }
+            >
+              <CandidatesBody />
+            </Suspense>
+          </ErrorBoundary>
+        )}
+      </QueryErrorResetBoundary>
     </Grid>
   );
 };

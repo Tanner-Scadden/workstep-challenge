@@ -1,40 +1,39 @@
-import { Candidate, CandidateSchema } from "../constants/candidateSchemas";
+import {
+  UpdateCandidateDocument,
+  UpdateCandidateMutationVariables,
+} from "../../../gql/graphql";
 import * as v from "valibot";
+import request from "graphql-request";
+import { APP_ENV } from "../constants/appEnv";
+import { DocumentType } from "../../../gql";
+import { CandidateSchema } from "../constants/candidateSchemas";
 
-export type UpdateCandidateOptions = {
-  id: number;
-  payload: Candidate;
-};
+export const updateCandidate = async (
+  variables: UpdateCandidateMutationVariables
+) => {
+  // Simulate a failure
+  if (variables.id === 2) {
+    throw new Error(`Failed to update candidate "${variables.update.name}"`);
+  }
 
-export const updateCandidate = async (options: UpdateCandidateOptions) => {
-  const res = await fetch(
-    `https://my-json-server.typicode.com/workstep/react-challenge-data/candidates/${options.id}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(options.payload),
-    }
+  const res = await request<DocumentType<typeof UpdateCandidateDocument>>(
+    APP_ENV.API_GRAPHQL_URL,
+    UpdateCandidateDocument,
+    variables
   );
 
-  const data = await res.json();
+  if (!res.updateCandidate.success || res.updateCandidate.errors?.length) {
+    const error =
+      res.updateCandidate.errors?.[0] || "Failed to fetch candidates";
+    throw new Error(error);
+  }
 
   // Make it feel more like a real API call
   await new Promise((res) => setTimeout(res, 500));
 
-  if (!res.ok) {
-    throw new Error(
-      "message" in data && typeof data.message === "string"
-        ? data.message
-        : "Failed to update candidate!"
-    );
-  }
+  const [candidate] = res.updateCandidate.candidates as v.Output<
+    typeof CandidateSchema
+  >[];
 
-  try {
-    return v.parse(CandidateSchema, data);
-  } catch (e) {
-    if (e instanceof v.ValiError) {
-      console.error(`Parsing Issues:`, e.issues);
-    }
-
-    throw new Error("Server error. Please try again later.");
-  }
+  return candidate;
 };
