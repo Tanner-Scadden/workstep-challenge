@@ -6,9 +6,9 @@ import {
   useEffect,
 } from "react";
 import { CandidateSchema } from "../constants/candidateSchemas";
-import type { CandidateStep } from "../constants/candidateConstants";
 import { useSearch } from "../../../hooks/useSearch";
 import * as v from "valibot";
+import { CandidateStep } from "../../../gql/graphql";
 
 export type CandidatesSearchStore = {
   step: CandidateStep | null;

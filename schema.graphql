@@ -1,0 +1,43 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Mutation {
+  updateCandidate(id: Int!, update: CandidatePatch!): CandidateResult!
+}
+
+type Query {
+  searchCandidates(step: CandidateStep, name: String): CandidateResult!
+}
+
+enum CandidateStep {
+  DRUG_TEST
+  BACKGROUND_CHECK
+  PAPERWORK
+}
+
+input CandidatePatch {
+  name: String!
+  email: String!
+  phone: String!
+  step: CandidateStep
+  time_interview: String!
+  profile_url: String!
+}
+
+type Candidate {
+  id: ID!
+  name: String!
+  email: String!
+  phone: String!
+  step: CandidateStep
+  time_interview: String!
+  profile_url: String!
+}
+
+type CandidateResult {
+  success: Boolean!
+  errors: [String]
+  candidates: [Candidate]
+}

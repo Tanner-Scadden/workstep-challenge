@@ -1,8 +1,9 @@
 import * as v from "valibot";
-import { CANDIDATE_STEP } from "./candidateConstants";
+import { CandidateStep } from "../../../gql/graphql";
 
+// Graphql already handles most of this, so it's not really needed as much with the graphql. But it's still useful for the front end to have a schema to validate against sometimes.
 export const CandidateSchema = v.object({
-  id: v.number(),
+  id: v.string(),
   name: v.string(),
   email: v.string(),
   phone: v.string(),
@@ -12,7 +13,7 @@ export const CandidateSchema = v.object({
     }
 
     try {
-      return v.parse(v.enum_(CANDIDATE_STEP), value);
+      return v.parse(v.enum_(CandidateStep), value);
     } catch (e) {
       return null;
     }
